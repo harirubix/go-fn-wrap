@@ -28,4 +28,4 @@ instance, err := wasmtime.NewInstance(store, module, []wasmtime.AsExtern{helloIt
 
 
 To build cargo / rust with updates
-cargo build --target wasm32-wasi
+cargo build --target wasm32-unknown-unknown

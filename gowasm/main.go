@@ -12,16 +12,6 @@ func add(a, b int32) int32 {
 	return a + b
 }
 
-func add4(a, b, c, d int32) int32 {
-	fmt.Println("Add4 from Go Wasmtime!")
-	fmt.Printf("a: %d, b: %d, c: %d, d: %d\n", a, b, c, d)
-	return a + b + c + d
-}
-
-func dummy(a int32) {
-	fmt.Printf("Dummy from Go Wasmtime! %d\n", a)
-}
-
 func main() {
 	// Create an engine and store
 	engine := wasmtime.NewEngine()
@@ -29,28 +19,17 @@ func main() {
 
 	// Load the WebAssembly module
 	module, err := wasmtime.NewModuleFromFile(store.Engine,
-		"../target/wasm32-wasi/debug/callback.wasm",
+		"../target/wasm32-unknown-unknown/debug/callback.wasm",
 	)
 	if err != nil {
 		fmt.Print("Error 0")
 		panic(err)
 	}
 
-	// helloItem := wasmtime.WrapFunc(store, hello)
-	// goodbyeItem := wasmtime.WrapFunc(store, bye)
-	// addFN := wasmtime.WrapFunc(store, add)
-	// instance, err := wasmtime.NewInstance(store, module, []wasmtime.AsExtern{
-	// 	helloItem, goodbyeItem, addFN})
+	linker := wasmtime.NewLinker(store.Engine)
+	linker.DefineFunc(store, "env", "add", add)
 
-	instance, err := wasmtime.NewInstance(store, module, []wasmtime.AsExtern{
-		wasmtime.WrapFunc(store, add),
-		wasmtime.WrapFunc(store, add4),
-		wasmtime.WrapFunc(store, add),
-
-		wasmtime.WrapFunc(store, add),
-
-		wasmtime.WrapFunc(store, dummy),
-	})
+	instance, err := linker.Instantiate(store, module)
 
 	if err != nil {
 		fmt.Print("Error 1")
