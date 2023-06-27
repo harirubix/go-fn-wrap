@@ -6,12 +6,20 @@ import (
 	"github.com/bytecodealliance/wasmtime-go"
 )
 
-func hello() {
-	fmt.Println("Hello from GO wasmtime!")
+func add(a, b int32) int32 {
+	fmt.Println("Add from Go Wasmtime!")
+	fmt.Printf("a: %d, b: %d\n", a, b)
+	return a + b
 }
 
-func bye() {
-	fmt.Println("Goodbye from Go Wasmtime!")
+func add4(a, b, c, d int32) int32 {
+	fmt.Println("Add4 from Go Wasmtime!")
+	fmt.Printf("a: %d, b: %d, c: %d, d: %d\n", a, b, c, d)
+	return a + b + c + d
+}
+
+func dummy(a int32) {
+	fmt.Printf("Dummy from Go Wasmtime! %d\n", a)
 }
 
 func main() {
@@ -28,20 +36,30 @@ func main() {
 		panic(err)
 	}
 
-	helloItem := wasmtime.WrapFunc(store, hello)
-	goodbyeItem := wasmtime.WrapFunc(store, bye)
-	instance, err := wasmtime.NewInstance(store, module, []wasmtime.AsExtern{helloItem, goodbyeItem})
+	// helloItem := wasmtime.WrapFunc(store, hello)
+	// goodbyeItem := wasmtime.WrapFunc(store, bye)
+	// addFN := wasmtime.WrapFunc(store, add)
+	// instance, err := wasmtime.NewInstance(store, module, []wasmtime.AsExtern{
+	// 	helloItem, goodbyeItem, addFN})
+
+	instance, err := wasmtime.NewInstance(store, module, []wasmtime.AsExtern{
+		wasmtime.WrapFunc(store, add),
+		wasmtime.WrapFunc(store, add4),
+		wasmtime.WrapFunc(store, add),
+
+		wasmtime.WrapFunc(store, add),
+
+		wasmtime.WrapFunc(store, dummy),
+	})
 
 	if err != nil {
 		fmt.Print("Error 1")
 		panic(err)
 	}
 
-	fireEventFunc := instance.GetExport(store, "run")
+	addAndMultiply := instance.GetExport(store, "add_and_multiply")
 
-	_, err = fireEventFunc.Func().Call(store)
-	if err != nil {
-		fmt.Print("Error 2")
-		panic(err)
-	}
+	// Call the "add_and_multiply" function from Rust
+	result, _ := addAndMultiply.Func().Call(store, 2, 3)
+	fmt.Println("Result:", result.(int32))
 }
