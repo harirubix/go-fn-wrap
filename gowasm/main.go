@@ -1,53 +1,12 @@
-// package main
-
-// import (
-// 	"fmt"
-
-// 	"github.com/bytecodealliance/wasmtime-go"
-// )
-
-// func add(a, b int32) int32 {
-// 	fmt.Println("Add from Go Wasmtime!")
-// 	fmt.Printf("a: %d, b: %d\n", a, b)
-// 	return a + b
-// }
-
-// func main() {
-// 	// Create an engine and store
-// 	engine := wasmtime.NewEngine()
-// 	store := wasmtime.NewStore(engine)
-
-// 	// Load the WebAssembly module
-// 	module, err := wasmtime.NewModuleFromFile(store.Engine,
-// 		"../target/wasm32-unknown-unknown/debug/callback.wasm",
-// 	)
-// 	if err != nil {
-// 		fmt.Print("Error 0")
-// 		panic(err)
-// 	}
-
-// 	linker := wasmtime.NewLinker(store.Engine)
-// 	linker.DefineFunc(store, "env", "add", add)
-
-// 	instance, err := linker.Instantiate(store, module)
-
-// 	if err != nil {
-// 		fmt.Print("Error 1")
-// 		panic(err)
-// 	}
-
-// 	addAndMultiply := instance.GetExport(store, "add_and_multiply")
-
-// 	// Call the "add_and_multiply" function from Rust
-// 	result, _ := addAndMultiply.Func().Call(store, 2, 3)
-// 	fmt.Println("Result:", result.(int32))
-// }
-
 package main
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"math/rand"
 	"os"
 
 	"github.com/bytecodealliance/wasmtime-go"
@@ -60,6 +19,16 @@ type WasmtimeRuntime struct {
 
 	input  []byte
 	output []byte
+}
+
+type User struct {
+	DID  string
+	Vote int
+}
+
+type Count struct {
+	Red  int
+	Blue int
 }
 
 func (r *WasmtimeRuntime) Init(wasmFile string) {
@@ -82,38 +51,76 @@ func (r *WasmtimeRuntime) loadInput(pointer int32) {
 	copy(r.memory.UnsafeData(r.store)[pointer:pointer+int32(len(r.input))], r.input)
 }
 
-func (r *WasmtimeRuntime) dumpOutput(pointer int32, muliply int32, length int32) {
-	fmt.Println("multiply :", muliply)
+func (r *WasmtimeRuntime) dumpOutput(pointer int32, uservote int32, red int32, blue int32, length int32) {
+	fmt.Println("red :", red)
+	fmt.Println("blue :", blue)
+	fmt.Println("uservote :", uservote)
 	r.output = make([]byte, length)
 	copy(r.output, r.memory.UnsafeData(r.store)[pointer:pointer+length])
+
+	count := Count{}
+	count.Red = int(red)
+	count.Blue = int(blue)
+
+	content, err := json.Marshal(count)
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = ioutil.WriteFile("votefile.json", content, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
-func (r *WasmtimeRuntime) RunHandler(data []byte, buf int32, b1 int32, b2 int32) []byte {
+func (r *WasmtimeRuntime) RunHandler(data []byte, did int32, vote int32, red int32, blue int32) []byte {
 	r.input = data
-	r.handler.Call(r.store, buf, b1, b2)
+	r.handler.Call(r.store, did, vote, red, blue)
 	fmt.Println("Result:", r.output)
 	return r.output
 }
 
 func main() {
-	size := 16
-	buf := make([]byte, size)
-	for i := 0; i < size; i++ {
-		buf[i] = 'a'
-	}
-	b1 := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b1, 12)
-	fmt.Println(b1)
 
-	b2 := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b2, 96)
-	fmt.Println(b2)
+	// choices : red=1 blue =2
 
-	merge1 := append(buf, b1...)
-	merge := append(merge1, b2...)
-	fmt.Println(merge)
+	randvote := rand.Intn(3-1) + 1
+
+	newuser := User{}
+	newuser.DID = "QmVkvoPGi9jvvuxsHDVJDgzPEzagBaWSZRYoRDzU244HjZ"
+	newuser.Vote = randvote
+
+	fmt.Println(" rand ", randvote)
+
+	did := []byte(newuser.DID)
+	vote := make([]byte, 4)
+	binary.LittleEndian.PutUint32(vote, uint32(randvote))
+
+	mergeuser := append(did, vote...)
+	fmt.Println(" merge user ", mergeuser)
+
+	var count Count
+
+	byteValue, _ := ioutil.ReadFile("votefile.json")
+	json.Unmarshal(byteValue, &count)
+
+	fmt.Println("countvalue ", count)
+
+	redvote := count.Red
+	bluevote := count.Blue
+
+	red := make([]byte, 4)
+	binary.LittleEndian.PutUint32(red, uint32(redvote))
+
+	blue := make([]byte, 4)
+	binary.LittleEndian.PutUint32(blue, uint32(bluevote))
+
+	mergevote := append(red, blue...)
+	fmt.Println("mergevote ", mergevote)
+
+	merge := append(mergeuser, mergevote...)
+	fmt.Println("merge ", merge)
 
 	runtime := &WasmtimeRuntime{}
 	runtime.Init("../target/wasm32-unknown-unknown/debug/callback.wasm")
-	runtime.RunHandler(merge, int32(len(buf)), int32(len(b1)), int32(len(b2)))
+	runtime.RunHandler(merge, int32(len(did)), int32(len(vote)), int32(len(red)), int32(len(blue)))
 }
